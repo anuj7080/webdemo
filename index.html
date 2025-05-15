@@ -1,112 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mask Detection</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 20px;
-      background-color: #f9f9f9;
-    }
-    h1 {
-      color: #333;
-    }
-    video, canvas, img {
-      margin-top: 20px;
-      width: 300px;
-      height: auto;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-    }
-    #label-container {
-      margin-top: 20px;
-      font-size: 22px;
-      font-weight: bold;
-    }
-    button, input[type="file"] {
-      margin: 10px;
-      padding: 10px 15px;
-      font-size: 16px;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Face Mask Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+        }
+        #webcam-container {
+            margin-top: 20px;
+        }
+        video, canvas {
+            border-radius: 10px;
+            border: 2px solid #ccc;
+        }
+        #label-container {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-  <h1>Mask Detection</h1>
+    <h1>Teachable Machine Face Mask Detection</h1>
+    <div>Teachable Machine Image Model</div>
+    <button type="button" onclick="init()">Start</button>
 
-  <!-- Webcam Section -->
-  <div>
-    <button onclick="startWebcam()">Start Webcam Detection</button>
-    <video id="webcam" autoplay playsinline muted></video>
-  </div>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
 
-  <!-- Upload Image Section -->
-  <div>
-    <input type="file" accept="image/*" onchange="handleImageUpload(event)">
-    <br/>
-    <img id="uploaded-image" />
-  </div>
+    <!-- TensorFlow.js & Teachable Machine Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
-  <div id="label-container">Prediction will appear here...</div>
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/l4frwD35K/";
+        let model, webcam, labelContainer, maxPredictions;
 
-  <!-- Teachable Machine Library -->
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
 
-  <script>
-    const URL = "https://teachablemachine.withgoogle.com/models/l4frwD35K/";
-    let model, webcam, maxPredictions;
+            // Load the model and metadata
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
 
-    async function loadModel() {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
-    }
+            // Setup webcam
+            const flip = true;
+            webcam = new tmImage.Webcam(200, 200, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
 
-    async function startWebcam() {
-      await loadModel();
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = '';
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
 
-      const flip = true;
-      webcam = new tmImage.Webcam(300, 300, flip);
-      await webcam.setup();
-      await webcam.play();
-      window.requestAnimationFrame(loop);
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
 
-      document.getElementById("webcam").replaceChildren(webcam.canvas);
-    }
-
-    async function loop() {
-      webcam.update();
-      await predictFromWebcam();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function predictFromWebcam() {
-      const prediction = await model.predict(webcam.canvas);
-      prediction.sort((a, b) => b.probability - a.probability);
-      displayPrediction(prediction[0]);
-    }
-
-    async function handleImageUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const img = document.getElementById("uploaded-image");
-      img.src = URL.createObjectURL(file);
-      img.onload = async () => {
-        await loadModel();
-        const prediction = await model.predict(img);
-        prediction.sort((a, b) => b.probability - a.probability);
-        displayPrediction(prediction[0]);
-      };
-    }
-
-    function displayPrediction(prediction) {
-      const label = document.getElementById("label-container");
-      label.textContent = `${prediction.className}: ${(prediction.probability * 100).toFixed(2)}%`;
-    }
-  </script>
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = 
+                    prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(2) + "%";
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+        }
+    </script>
 </body>
 </html>
