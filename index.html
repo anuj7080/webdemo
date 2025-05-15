@@ -8,66 +8,105 @@
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      margin: 0;
       padding: 20px;
-      background-color: #f0f0f0;
+      background-color: #f9f9f9;
     }
-    video {
+    h1 {
+      color: #333;
+    }
+    video, canvas, img {
+      margin-top: 20px;
       width: 300px;
       height: auto;
       border-radius: 10px;
+      border: 1px solid #ccc;
     }
     #label-container {
       margin-top: 20px;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: bold;
+    }
+    button, input[type="file"] {
+      margin: 10px;
+      padding: 10px 15px;
+      font-size: 16px;
     }
   </style>
 </head>
 <body>
   <h1>Mask Detection</h1>
-  <video id="webcam" autoplay playsinline muted></video>
-  <div id="label-container"></div>
 
-  <!-- Load Teachable Machine library -->
+  <!-- Webcam Section -->
+  <div>
+    <button onclick="startWebcam()">Start Webcam Detection</button>
+    <video id="webcam" autoplay playsinline muted></video>
+  </div>
+
+  <!-- Upload Image Section -->
+  <div>
+    <input type="file" accept="image/*" onchange="handleImageUpload(event)">
+    <br/>
+    <img id="uploaded-image" />
+  </div>
+
+  <div id="label-container">Prediction will appear here...</div>
+
+  <!-- Teachable Machine Library -->
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
   <script>
     const URL = "https://teachablemachine.withgoogle.com/models/l4frwD35K/";
-    let model, webcam, labelContainer, maxPredictions;
+    let model, webcam, maxPredictions;
 
-    async function init() {
+    async function loadModel() {
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
-
-      // Load the model and metadata
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
+    }
 
-      // Setup webcam
-      const flip = true; // flip webcam
+    async function startWebcam() {
+      await loadModel();
+
+      const flip = true;
       webcam = new tmImage.Webcam(300, 300, flip);
-      await webcam.setup(); // request access
+      await webcam.setup();
       await webcam.play();
       window.requestAnimationFrame(loop);
 
-      document.getElementById("webcam").appendChild(webcam.canvas);
-      labelContainer = document.getElementById("label-container");
+      document.getElementById("webcam").replaceChildren(webcam.canvas);
     }
 
     async function loop() {
-      webcam.update(); // update webcam frame
-      await predict();
+      webcam.update();
+      await predictFromWebcam();
       window.requestAnimationFrame(loop);
     }
 
-    async function predict() {
+    async function predictFromWebcam() {
       const prediction = await model.predict(webcam.canvas);
       prediction.sort((a, b) => b.probability - a.probability);
-      labelContainer.innerHTML = `${prediction[0].className}: ${(prediction[0].probability * 100).toFixed(2)}%`;
+      displayPrediction(prediction[0]);
     }
 
-    window.addEventListener("load", init);
+    async function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const img = document.getElementById("uploaded-image");
+      img.src = URL.createObjectURL(file);
+      img.onload = async () => {
+        await loadModel();
+        const prediction = await model.predict(img);
+        prediction.sort((a, b) => b.probability - a.probability);
+        displayPrediction(prediction[0]);
+      };
+    }
+
+    function displayPrediction(prediction) {
+      const label = document.getElementById("label-container");
+      label.textContent = `${prediction.className}: ${(prediction.probability * 100).toFixed(2)}%`;
+    }
   </script>
 </body>
 </html>
